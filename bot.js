@@ -1,8 +1,8 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 
-// Generate 8-digit alphanumeric pairing code (XXXX-XXXX format)
+// Generate 8-digit pairing code (XXXX-XXXX)
 function generatePairingCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded easily confused chars
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 8; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -15,32 +15,24 @@ const client = new Client({
   authStrategy: new LocalAuth({ dataPath: './session' }),
   puppeteer: { 
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage'
+    ]
   }
 });
 
-// Store and display pairing code
-let pairingCode = generatePairingCode();
-let pairingTimeout;
-
 client.on('qr', () => {
-  pairingCode = generatePairingCode(); // Refresh code on new QR event
-  console.log('\n=== WHATSAPP PAIRING INSTRUCTIONS ===');
-  console.log(`Pairing Code: ${pairingCode}`);
-  console.log('1. Open WhatsApp on your phone');
-  console.log('2. Go to Settings → Linked Devices → Link a Device');
-  console.log('3. Choose "Link with phone number"');
-  console.log(`4. Enter this code: ${pairingCode}\n`);
-  
-  // Refresh code every 2 minutes (WhatsApp's QR timeout)
-  clearTimeout(pairingTimeout);
-  pairingTimeout = setTimeout(() => {
-    console.log('\n⚠️ Code expired. Generating new code...');
-  }, 120000);
+  const pairingCode = generatePairingCode();
+  console.log('\n=== WHATSAPP PAIRING ===');
+  console.log(`Code: ${pairingCode}`);
+  console.log('1. Open WhatsApp → Linked Devices → Link with number');
+  console.log(`2. Enter code: ${pairingCode}\n`);
 });
 
 client.on('ready', () => {
-  console.log('✅ Bot is online! Send !tagall in any group');
+  console.log('✅ Bot ready! Use !tagall in groups');
 });
 
 client.on('message', async msg => {
@@ -48,11 +40,11 @@ client.on('message', async msg => {
     try {
       const chat = await msg.getChat();
       const mentions = chat.participants
-        .filter(p => p.id._serialized !== msg.from) // Exclude sender
+        .filter(p => !p.isMe)
         .map(p => p.id._serialized);
       
       await msg.reply(
-        `📢 Attention: ${mentions.map(m => `@${m.split('@')[0]}`.join(' ')}`,
+        `📢 @everyone: ${mentions.map(m => `@${m.split('@')[0]}`.join(' ')}`,
         { mentions }
       );
     } catch (error) {
@@ -62,3 +54,6 @@ client.on('message', async msg => {
 });
 
 client.initialize();
+
+// Keep process alive
+process.on('SIGINT', () => process.exit());
