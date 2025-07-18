@@ -1,15 +1,28 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const config = require('./config');
 
-// Generate 8-digit pairing code (XXXX-XXXX)
+// Generate 8-digit code (XXXX-XXXX)
 function generatePairingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i === 3) code += '-';
+  return [...Array(8)].map((_,i) => i === 4 ? '-' : chars[Math.floor(Math.random()*32)]).join('');
+}
+
+// Notification with retries
+async function sendAlert(message, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await client.sendMessage(
+        `${config.myNumber}@c.us`, 
+        `🔔 BOT ALERT:\n${message}`
+      );
+      console.log('Notification sent successfully');
+      return true;
+    } catch (error) {
+      console.error(`Attempt ${i+1}: Failed to send alert - ${error.message}`);
+      if (i < retries - 1) await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
-  return code;
+  return false;
 }
 
 const client = new Client({
@@ -27,22 +40,14 @@ const client = new Client({
   }
 });
 
-// WhatsApp Notification Handler
-async function sendAlert(message) {
-  try {
-    await client.sendMessage(
-      `${config.myNumber}@c.us`,
-      `🔔 BOT NOTIFICATION:\n${message}`
-    );
-    console.log('Notification sent');
-  } catch (error) {
-    console.error('Failed to send alert:', error.message);
-  }
-}
+// ========================
+// EVENT HANDLERS
+// ========================
 
 client.on('qr', async () => {
   const code = generatePairingCode();
   console.log(`\nPAIRING CODE: ${code}`);
+  
   await sendAlert(
     `Pairing Code: ${code}\n` +
     `Expires in 2 minutes\n` +
@@ -50,9 +55,14 @@ client.on('qr', async () => {
   );
 });
 
+client.on('authenticated', () => {
+  console.log('✅ Authenticated!');
+  sendAlert('Device linked successfully!');
+});
+
 client.on('ready', () => {
   console.log('🤖 Bot ready');
-  sendAlert('✅ Bot is now online');
+  sendAlert('Bot is now online');
 });
 
 client.on('message', async msg => {
@@ -77,4 +87,4 @@ client.on('message', async msg => {
 client.initialize();
 
 // Keep alive
-setInterval(() => console.log('❤️ Pulse check'), 30000);
+setInterval(() => console.log('[Heartbeat]'), 30000);
