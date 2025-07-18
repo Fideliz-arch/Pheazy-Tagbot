@@ -1,11 +1,14 @@
-name: WhatsApp Bot
+name: WhatsApp Bot CI/CD
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
   schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes
+    - cron: '*/30 * * * *' # Every 30 minutes
+
+env:
+  CI: true
 
 jobs:
   deploy:
@@ -24,18 +27,48 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y xvfb libgbm-dev
+        sudo apt-get install -y \
+          xvfb \
+          libgbm-dev \
+          msmtp \
+          msmtp-mta \
+          mailutils
         npm install
     
-    - name: Run Bot
+    - name: Configure email
+      run: |
+        mkdir -p ~/.msmtp
+        echo "defaults
+        auth           on
+        tls            on
+        tls_trust_file /etc/ssl/certs/ca-certificates.crt
+        logfile        ~/.msmtp/msmtp.log
+
+        account        gmail
+        host           smtp.gmail.com
+        port           587
+        from           ${{ secrets.EMAIL_FROM }}
+        user           ${{ secrets.EMAIL_FROM }}
+        password       ${{ secrets.GMAIL_APP_PASSWORD }}
+
+        account default : gmail" > ~/.msmtprc
+        chmod 600 ~/.msmtprc
+    
+    - name: Run bot
       run: |
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         export DISPLAY=:99
-        npm start
+        nohup node bot.js > bot.log 2>&1 &
+        sleep 10 # Wait for initialization
+        cat bot.log
     
-    - name: Keep Alive
+    - name: Monitor
       run: |
         echo "Monitoring bot status..."
         while sleep 60; do
           echo "[$(date +'%H:%M:%S')] Workflow active"
+          if ! pgrep -f "node bot.js"; then
+            echo "Bot process died!"
+            exit 1
+          fi
         done
