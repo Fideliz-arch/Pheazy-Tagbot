@@ -1,0 +1,31 @@
+name: WhatsApp Bot CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # Auto-restart every 6 hours
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Run bot (headless)
+      run: xvfb-run --auto-servernum npm start
+      env:
+        DISPLAY: ":99"
+    
+    - name: Keep workflow alive
+      run: sleep 600 # 10-minute timeout buffer
