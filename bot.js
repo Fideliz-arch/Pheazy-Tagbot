@@ -1,46 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const fs = require('fs');
 const config = require('./config');
 
-// ========================
-// LOGGER SETUP
-// ========================
-const logStream = fs.createWriteStream('./bot.log', { flags: 'a' });
-const log = (message) => {
-  const timestamp = new Date().toISOString();
-  logStream.write(`${timestamp} - ${message}\n`);
-  console.log(`[${timestamp}] ${message}`);
-};
-
-// ========================
-// NOTIFICATION SYSTEMS
-// ========================
-const notifications = {
-  whatsapp: async (text) => {
-    try {
-      await client.sendMessage(
-        `${config.myNumber}@c.us`,
-        `🔔 BOT ALERT:\n${text}`
-      );
-      log(`WhatsApp notification sent`);
-    } catch (error) {
-      log(`WhatsApp notify failed: ${error.message}`);
-    }
-  },
-
-  email: (subject, body) => {
-    if (process.env.CI) {
-      require('child_process').execSync(
-        `echo "${body}" | mail -s "${subject}" ${config.notificationEmail}`
-      );
-      log(`Email alert sent`);
-    }
-  }
-};
-
-// ========================
-// CORE FUNCTIONS
-// ========================
+// Generate 8-digit pairing code (XXXX-XXXX)
 function generatePairingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -51,53 +12,47 @@ function generatePairingCode() {
   return code;
 }
 
-// ========================
-// CLIENT SETUP
-// ========================
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: `bot-${config.myNumber}`,
-    dataPath: './sessions',
-    backupSyncIntervalMs: 300000 // 5 min sync
+    dataPath: './sessions'
   }),
   puppeteer: {
     headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--single-process'
+      '--disable-dev-shm-usage'
     ]
-  },
-  takeoverOnConflict: true,
-  restartOnAuthFail: true
+  }
 });
 
-// ========================
-// EVENT HANDLERS
-// ========================
+// WhatsApp Notification Handler
+async function sendAlert(message) {
+  try {
+    await client.sendMessage(
+      `${config.myNumber}@c.us`,
+      `🔔 BOT NOTIFICATION:\n${message}`
+    );
+    console.log('Notification sent');
+  } catch (error) {
+    console.error('Failed to send alert:', error.message);
+  }
+}
+
 client.on('qr', async () => {
   const code = generatePairingCode();
-  log(`Pairing code generated: ${code}`);
-  
-  // Send alerts
-  await notifications.whatsapp(
-    `Pairing Code: ${code}\nExpires in 2 minutes`
+  console.log(`\nPAIRING CODE: ${code}`);
+  await sendAlert(
+    `Pairing Code: ${code}\n` +
+    `Expires in 2 minutes\n` +
+    `Go to: WhatsApp → Linked Devices → "Link with number"`
   );
-  notifications.email(
-    'New WhatsApp Pairing Code', 
-    `Code: ${code}\nFor: ${config.myNumber}`
-  );
-});
-
-client.on('authenticated', () => {
-  log('Authentication successful');
-  notifications.whatsapp('✅ Device linked successfully');
 });
 
 client.on('ready', () => {
-  log('Bot operational');
-  notifications.whatsapp('🚀 Bot is now online');
+  console.log('🤖 Bot ready');
+  sendAlert('✅ Bot is now online');
 });
 
 client.on('message', async msg => {
@@ -112,25 +67,14 @@ client.on('message', async msg => {
         `${config.mentionText} ${mentions.map(m => `@${m.split('@')[0]}`).join(' ')}`,
         { mentions }
       );
-      
-      log(`Tagged ${mentions.length} users in ${chat.name}`);
     } catch (error) {
-      log(`Tagging error: ${error.message}`);
-      notifications.whatsapp(`⚠️ Tagging failed: ${error.message}`);
+      console.error('Tagging error:', error);
+      await sendAlert(`⚠️ Tagging failed: ${error.message}`);
     }
   }
 });
 
-// ========================
-// INITIALIZATION
-// ========================
 client.initialize();
 
 // Keep alive
-setInterval(() => log('Heartbeat'), 30000);
-
-// Error handling
-process.on('unhandledRejection', (err) => {
-  log(`CRITICAL ERROR: ${err.stack}`);
-  notifications.whatsapp('🆘 Bot crashed! Check logs');
-});
+setInterval(() => console.log('❤️ Pulse check'), 30000);
