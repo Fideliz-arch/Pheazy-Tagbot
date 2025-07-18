@@ -1,38 +1,42 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 
-// Generate 8-digit pairing code (XXXX-XXXX)
-function generatePairingCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i === 3) code += '-';
-  }
-  return code;
+// Generate pairing code
+function generateCode() {
+  return Array.from({length: 8}, (_,i) => 
+    i === 4 ? '-' : 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]
+  ).join('');
 }
+
+console.log('🚀 Starting WhatsApp Bot...');
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: './session' }),
-  puppeteer: { 
+  puppeteer: {
     headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-gpu',
       '--disable-dev-shm-usage'
     ]
   }
 });
 
 client.on('qr', () => {
-  const pairingCode = generatePairingCode();
-  console.log('\n=== WHATSAPP PAIRING ===');
-  console.log(`Code: ${pairingCode}`);
-  console.log('1. Open WhatsApp → Linked Devices → Link with number');
-  console.log(`2. Enter code: ${pairingCode}\n`);
+  const code = generateCode();
+  console.log('\n🔢 PAIRING CODE:', code);
+  console.log('1. Open WhatsApp → Linked Devices');
+  console.log('2. Tap "Link with phone number"');
+  console.log(`3. Enter code: ${code}\n`);
+});
+
+client.on('authenticated', () => {
+  console.log('✅ Authentication successful!');
 });
 
 client.on('ready', () => {
-  console.log('✅ Bot ready! Use !tagall in groups');
+  console.log('\n🤖 Bot is ONLINE!');
+  console.log('Use !tagall in any group chat');
 });
 
 client.on('message', async msg => {
@@ -44,16 +48,20 @@ client.on('message', async msg => {
         .map(p => p.id._serialized);
       
       await msg.reply(
-        `📢 @everyone: ${mentions.map(m => `@${m.split('@')[0]}`.join(' ')}`,
+        `📢 @everyone: ${mentions.map(m => `@${m.split('@')[0]}`).join(' ')}`,
         { mentions }
       );
     } catch (error) {
-      console.error('Tagging error:', error);
+      console.error('⚠️ Tagging error:', error.message);
     }
   }
 });
 
+// Handle errors
+client.on('auth_failure', () => console.error('❌ Authentication failed'));
+client.on('disconnected', () => console.error('❌ Disconnected'));
+
 client.initialize();
 
 // Keep process alive
-process.on('SIGINT', () => process.exit());
+setInterval(() => {}, 1000);
