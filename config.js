@@ -1,16 +1,11 @@
 module.exports = {
-  // REQUIRED CONFIG
-  myNumber: '2349017117779', // International format (no +)
+  // REQUIRED
+  myNumber: '2349017117779', // Your WhatsApp number (no + or spaces)
   
-  // NOTIFICATIONS
-  notificationEmail: 'zionfidelis200513@gmail.com',
-  notificationGroup: '1234567890-123456@g.us', // Group ID
-  
-  // BOT BEHAVIOR
-  command: '!tagall',
-  mentionText: '📢 Attention:',
+  // OPTIONAL
+  command: '!tagall',     // Trigger command
+  mentionText: '📢 Attention:', // Tag message
   
   // SECURITY
-  adminNumbers: ['2349017117779'], // Control numbers
-  pairingCodeExpiry: 120000 // 2 minutes
+  adminNumbers: ['2349017117779'] // Numbers that can control bot
 };
