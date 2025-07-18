@@ -1,7 +1,46 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
+const fs = require('fs');
 const config = require('./config');
 
-// Generate 8-digit code (XXXX-XXXX)
+// ========================
+// LOGGER SETUP
+// ========================
+const logStream = fs.createWriteStream('./bot.log', { flags: 'a' });
+const log = (message) => {
+  const timestamp = new Date().toISOString();
+  logStream.write(`${timestamp} - ${message}\n`);
+  console.log(`[${timestamp}] ${message}`);
+};
+
+// ========================
+// NOTIFICATION SYSTEMS
+// ========================
+const notifications = {
+  whatsapp: async (text) => {
+    try {
+      await client.sendMessage(
+        `${config.myNumber}@c.us`,
+        `🔔 BOT ALERT:\n${text}`
+      );
+      log(`WhatsApp notification sent`);
+    } catch (error) {
+      log(`WhatsApp notify failed: ${error.message}`);
+    }
+  },
+
+  email: (subject, body) => {
+    if (process.env.CI) {
+      require('child_process').execSync(
+        `echo "${body}" | mail -s "${subject}" ${config.notificationEmail}`
+      );
+      log(`Email alert sent`);
+    }
+  }
+};
+
+// ========================
+// CORE FUNCTIONS
+// ========================
 function generatePairingCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -12,40 +51,53 @@ function generatePairingCode() {
   return code;
 }
 
-console.log(`🚀 Starting bot for ${config.myName} (${config.myNumber})`);
-
+// ========================
+// CLIENT SETUP
+// ========================
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: `bot-${config.myNumber}`,
-    dataPath: './sessions'
+    dataPath: './sessions',
+    backupSyncIntervalMs: 300000 // 5 min sync
   }),
   puppeteer: {
     headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage'
+      '--disable-dev-shm-usage',
+      '--single-process'
     ]
-  }
+  },
+  takeoverOnConflict: true,
+  restartOnAuthFail: true
 });
 
-// Keep alive heartbeat
-setInterval(() => {
-  console.log(`[${new Date().toLocaleTimeString()}] Bot active`);
-}, 30000);
-
-client.on('qr', () => {
+// ========================
+// EVENT HANDLERS
+// ========================
+client.on('qr', async () => {
   const code = generatePairingCode();
-  console.log('\n=== WHATSAPP LINKING ===');
-  console.log(`For: ${config.myNumber}`);
-  console.log(`Code: ${code}`);
-  console.log('1. WhatsApp → Linked Devices → "Link with number"');
-  console.log(`2. Enter code: ${code}\n`);
+  log(`Pairing code generated: ${code}`);
+  
+  // Send alerts
+  await notifications.whatsapp(
+    `Pairing Code: ${code}\nExpires in 2 minutes`
+  );
+  notifications.email(
+    'New WhatsApp Pairing Code', 
+    `Code: ${code}\nFor: ${config.myNumber}`
+  );
+});
+
+client.on('authenticated', () => {
+  log('Authentication successful');
+  notifications.whatsapp('✅ Device linked successfully');
 });
 
 client.on('ready', () => {
-  console.log('\n🤖 BOT ONLINE');
-  console.log(`Use "${config.command}" in groups`);
+  log('Bot operational');
+  notifications.whatsapp('🚀 Bot is now online');
 });
 
 client.on('message', async msg => {
@@ -60,10 +112,25 @@ client.on('message', async msg => {
         `${config.mentionText} ${mentions.map(m => `@${m.split('@')[0]}`).join(' ')}`,
         { mentions }
       );
+      
+      log(`Tagged ${mentions.length} users in ${chat.name}`);
     } catch (error) {
-      console.error('⚠️ Tagging error:', error.message);
+      log(`Tagging error: ${error.message}`);
+      notifications.whatsapp(`⚠️ Tagging failed: ${error.message}`);
     }
   }
 });
 
+// ========================
+// INITIALIZATION
+// ========================
 client.initialize();
+
+// Keep alive
+setInterval(() => log('Heartbeat'), 30000);
+
+// Error handling
+process.on('unhandledRejection', (err) => {
+  log(`CRITICAL ERROR: ${err.stack}`);
+  notifications.whatsapp('🆘 Bot crashed! Check logs');
+});
