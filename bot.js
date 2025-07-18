@@ -1,24 +1,22 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const config = require('./config');
 
-// Generate guaranteed 8-digit code (XXXX-XXXX)
+// Generate 8-digit code (XXXX-XXXX)
 function generatePairingCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 unambiguous chars
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  
   for (let i = 0; i < 8; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i === 3) code += '-'; // Insert hyphen after 4 chars
+    if (i === 3) code += '-';
   }
-  
-  return code; // Example: "5XK9-2F8M"
+  return code;
 }
 
 console.log(`🚀 Starting bot for ${config.myName} (${config.myNumber})`);
 
 const client = new Client({
   authStrategy: new LocalAuth({
-    clientId: `bot-${config.myNumber}`, // Unique session per number
+    clientId: `bot-${config.myNumber}`,
     dataPath: './sessions'
   }),
   puppeteer: {
@@ -31,26 +29,25 @@ const client = new Client({
   }
 });
 
-// Pairing Code Event
+// Keep alive heartbeat
+setInterval(() => {
+  console.log(`[${new Date().toLocaleTimeString()}] Bot active`);
+}, 30000);
+
 client.on('qr', () => {
   const code = generatePairingCode();
   console.log('\n=== WHATSAPP LINKING ===');
-  console.log(`Number: ${config.myNumber}`);
-  console.log(`8-Digit Code: ${code}`);
-  console.log('1. Open WhatsApp → Linked Devices');
-  console.log('2. Tap "Link with phone number"');
-  console.log(`3. Enter code: ${code}\n`);
-});
-
-client.on('authenticated', () => {
-  console.log(`✅ Linked to ${config.myNumber}`);
+  console.log(`For: ${config.myNumber}`);
+  console.log(`Code: ${code}`);
+  console.log('1. WhatsApp → Linked Devices → "Link with number"');
+  console.log(`2. Enter code: ${code}\n`);
 });
 
 client.on('ready', () => {
-  console.log(`\n🤖 BOT ONLINE | Use "${config.command}" in groups`);
+  console.log('\n🤖 BOT ONLINE');
+  console.log(`Use "${config.command}" in groups`);
 });
 
-// Message Handling
 client.on('message', async msg => {
   if (msg.body === config.command && msg.isGroupMsg) {
     try {
@@ -64,12 +61,9 @@ client.on('message', async msg => {
         { mentions }
       );
     } catch (error) {
-      console.error('Tagging failed:', error.message);
+      console.error('⚠️ Tagging error:', error.message);
     }
   }
 });
 
 client.initialize();
-
-// Keep process alive
-setInterval(() => {}, 1000);
