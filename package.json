@@ -1,15 +1,11 @@
 {
   "name": "whatsapp-tagbot",
-  "version": "4.1",
+  "version": "5.0",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "test": "echo \"No tests configured\" && exit 0"
+    "start": "node bot.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
   }
 }
